@@ -1,0 +1,9 @@
+.deid-data/
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+phi_vault.json
+shared_db.json
+uploaded_reference/
