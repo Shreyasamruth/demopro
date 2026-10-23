@@ -43,7 +43,11 @@ class DeidAgent:
             "Each PHI entry needs text (exact transcription; use [QR CODE], [SIGNATURE] etc for nontext), "
             "label (string) and box_2d [ymin,xmin,ymax,xmax] normalized to 0..1000 on THIS page. "
             "Include a separate box for EVERY occurrence, even if the same name is repeated. "
-            "Include all PHI characters in each box. Do not invent detections, substitute mock data, or omit a page."
+            "Include all PHI characters in each box. Also return field_box_2d in the same coordinate format "
+            "covering the identifying field LABEL and its COMPLETE value (for example Patient Name: Jane Doe, "
+            "Patient ID: PID-1234, Report Date: 01/01/2026 or Referring Dr: Dr Smith). "
+            "Keep neighboring non-identifying fields, clinical headings and measurements outside that box. "
+            "Do not invent detections, substitute mock data, or omit a page."
         )
         return self._invoke([HumanMessage(content=[dict(type="text", text=prompt),
             dict(type="image_url", image_url=dict(url=f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode()}"))])])

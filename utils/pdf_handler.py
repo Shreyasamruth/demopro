@@ -13,6 +13,7 @@ class RenderedPage:
     native_text: str = ""
     # Native text locations are normalized to the displayed, rotated page.
     words: list = None
+    position_source: str = ""
 
     def png(self):
         buffer = io.BytesIO()
@@ -40,7 +41,8 @@ class PDFHandler:
                                            rect.x0 / page.rect.width * 1000,
                                            rect.y1 / page.rect.height * 1000,
                                            rect.x1 / page.rect.width * 1000]))
-                pages.append(RenderedPage(image, page.rect.width, page.rect.height, page.get_text(), words))
+                pages.append(RenderedPage(image, page.rect.width, page.rect.height, page.get_text(), words,
+                                          "pdf" if words else ""))
         return pages
 
     def export(self, pages, sanitized_images):

@@ -43,8 +43,11 @@ class PHIVault:
         finally:
             db.close()
 
-    def store(self, doc_id, original, mapping, extension, source_name, masked_digest):
-        payload = json.dumps(dict(original=base64.b64encode(original).decode(), mapping=mapping, extension=extension, source_name=source_name, masked_digest=masked_digest)).encode()
+    def store(self, doc_id, original, mapping, extension, source_name, masked_digest, restoration_text=None):
+        data = dict(original=base64.b64encode(original).decode(), mapping=mapping, extension=extension, source_name=source_name, masked_digest=masked_digest)
+        if restoration_text is not None:
+            data["restoration_text"] = restoration_text
+        payload = json.dumps(data).encode()
         nonce = secrets.token_bytes(12)
         encrypted = self.cipher.encrypt(nonce, payload, doc_id.encode())
         with self.connect() as db:

@@ -40,7 +40,8 @@ class DeidService:
         self.auth.require(session, ("admin",))
         doc_id = uuid.uuid4().hex
         digest = hashlib.sha256(result.masked).hexdigest()
-        self._vault.store(doc_id, result.original, result.mapping, analysis.extension, Path(source_name).name, digest)
+        self._vault.store(doc_id, result.original, result.mapping, analysis.extension, Path(source_name).name, digest,
+                          restoration_text=result.restoration_text)
         try:
             self._db.add_document(doc_id, result.masked_text, base64.b64encode(result.masked).decode(), result.extension, result.phi_count)
         except Exception:
@@ -68,4 +69,4 @@ class DeidService:
             raise ValueError("The shared report was modified. Restoration has been blocked.")
         self._audit(user["name"], "restored", doc_id)
         return dict(original=base64.b64decode(private["original"]), extension=private["extension"],
-                    text=self._vault.demask_text(shared["masked_text"], doc_id), doctor_notes=shared["doctor_notes"])
+                    text=self._vault.demask_text(private.get("restoration_text", shared["masked_text"]), doc_id), doctor_notes=shared["doctor_notes"])

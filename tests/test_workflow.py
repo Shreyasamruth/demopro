@@ -85,7 +85,9 @@ def test_multipage_layout_and_private_restoration(accounts, report, tmp_path):
             for ent in results[index]["personal_data"]:
                 y0, x0, y1, x1 = ent["box_2d"]
                 pixel = masked.previews[index].getpixel((int((x0 + x1) / 2 / 1000 * 800), int((y0 + y1) / 2 / 1000 * 1000)))
-                assert pixel == (0, 0, 0)
+                assert pixel == (255, 255, 255)
+            assert "Patient:" not in masked.masked_text
+            assert "[PHI_" not in masked.masked_text
     reference = service.share(admin, analysis, "Alice-private-report.pdf", reviewed=True)
     public = service.documents(doctor)[reference]
     assert "original_file_b64" not in public
@@ -166,13 +168,19 @@ def test_invalid_boxes_block_sharing(report, box):
         DocumentProcessor().analyze(original, "report.pdf", FixtureDetector(results))
 
 
-def test_missing_repeat_box_and_rule_location_block_sharing(report):
+def test_local_ocr_finds_repeats_and_unlocated_rules_block_sharing(report):
     original, results = report
     processor = DocumentProcessor()
     page = processor.pdf.render(original)[0]
     scan = page.png()
     results[0]["personal_data"].pop()
     analysis = processor.analyze(scan, "scan.png", FixtureDetector([results[0]]))
+    clean = processor.mask(analysis)
+    for entity in report[1][0]["personal_data"]:
+        y0, x0, y1, x1 = entity["box_2d"]
+        assert clean.previews[0].getpixel((int((x0 + x1) * .4), int((y0 + y1) * .5))) == (255, 255, 255)
+    # A transcribed occurrence absent from actual page geometry must still fail.
+    analysis.texts[0] += "\nAlice Morgan"
     with pytest.raises(ValueError, match="Repeated"):
         processor.mask(analysis)
     result = dict(full_text="Contact alice@example.com", personal_data=[])
@@ -273,7 +281,7 @@ def test_rotated_pdf_preserves_orientation_and_page_boxes(report):
     for entity in results[0]["personal_data"]:
         y0, x0, y1, x1 = entity["box_2d"]
         x, y = int((x0 + x1) * .5), int((y0 + y1) * .4)
-        assert masked.previews[0].getpixel((x, y)) == (0, 0, 0)
+        assert masked.previews[0].getpixel((x, y)) == (255, 255, 255)
     analysis.detections.pop()
     with pytest.raises(ValueError, match="Every page"):
         processor.mask(analysis)

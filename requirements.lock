@@ -32,6 +32,7 @@ langchain-protocol==0.0.20
 langsmith==0.14.11
 narwhals==2.27.1
 numpy==2.5.4
+opencv-python-headless==4.14.0.94
 orjson==3.13.0
 packaging==26.3
 pandas==3.0.6

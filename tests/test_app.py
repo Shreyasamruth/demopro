@@ -69,11 +69,11 @@ def test_admin_upload_preview_and_share(tmp_path, monkeypatch, report):
     app.run()
     next(b for b in app.button if b.label == "Scan report and identify PHI").click().run()
     assert not app.exception and not app.error
-    next(b for b in app.button if b.label == "Preview masked report").click().run()
+    next(b for b in app.button if b.label == "Preview clean report").click().run()
     assert not app.exception and not app.error
-    assert app.checkbox[0].label == "I reviewed every page and confirmed the PHI is masked."
-    assert next(b for b in app.button if b.label == "Share masked report").disabled
+    assert app.checkbox[0].label == "I reviewed every page and confirmed the identifying fields are removed."
+    assert next(b for b in app.button if b.label == "Share clean report").disabled
     app.checkbox[0].check().run()
-    next(b for b in app.button if b.label == "Share masked report").click().run()
+    next(b for b in app.button if b.label == "Share clean report").click().run()
     assert not app.exception and not app.error
     assert len(service.documents(session)) == 1

@@ -57,10 +57,10 @@ def main():
     st.title("Admin report portal" if user["role"] == "admin" else "Doctor review portal")
 
     if user["role"] == "admin":
-        upload_tab, returned_tab = st.tabs(["Upload and mask", "Returned reports"])
+        upload_tab, returned_tab = st.tabs(["Create clean copy", "Returned reports"])
         with upload_tab:
             uploaded = st.file_uploader("Upload a medical report", type=["pdf", "png", "jpg", "jpeg", "txt"])
-            st.caption("Analysis sends the document to the configured Google AI provider. Review every masked page before sharing.")
+            st.caption("Analysis sends the document to the configured Google AI provider. Identifying fields and labels are removed from the clean copy. Review every page before sharing.")
             if uploaded is not None:
                 raw = uploaded.getvalue()
                 fingerprint = hashlib.sha256(raw + uploaded.name.encode()).hexdigest()
@@ -78,8 +78,8 @@ def main():
                             st.error(str(exc))
                 if "analysis" in st.session_state:
                     analysis = copy.deepcopy(st.session_state["analysis"])
-                    st.subheader("Review PHI locations")
-                    st.caption("Boxes use coordinates from 0 to 1000: top, left, bottom, right. Add missed identifiers before previewing.")
+                    st.subheader("Review fields to remove")
+                    st.caption("Selections should cover each identifying label and its full value. Coordinates run from 0 to 1000: top, left, bottom, right. Add missed identifiers before previewing.")
                     for number, entities in enumerate(analysis.detections):
                         with st.expander(f"Page {number + 1}", expanded=True):
                             if analysis.pages:
@@ -108,7 +108,7 @@ def main():
                     if st.session_state.get("preview_fingerprint") != edit_fingerprint:
                         st.session_state.pop("preview", None)
                         st.session_state["approval"] = False
-                    if st.button("Preview masked report"):
+                    if st.button("Preview clean report"):
                         try:
                             st.session_state["preview"] = service.preview(token, analysis)
                             st.session_state["preview_fingerprint"] = edit_fingerprint
@@ -117,12 +117,12 @@ def main():
                             st.error(str(exc))
                     preview = st.session_state.get("preview")
                     if preview is not None:
-                        st.subheader("Copy the doctor will receive")
+                        st.subheader("Clean copy the doctor will receive")
                         for number, page in enumerate(preview.previews):
-                            st.image(page, caption=f"Masked page {number + 1}", use_container_width=True)
-                        st.text_area("Masked text", preview.masked_text, disabled=True)
-                        st.checkbox("I reviewed every page and confirmed the PHI is masked.", key="approval")
-                        if st.button("Share masked report", disabled=not st.session_state.get("approval")):
+                            st.image(page, caption=f"Clean page {number + 1}", use_container_width=True)
+                        st.text_area("Clean report text", preview.masked_text, disabled=True)
+                        st.checkbox("I reviewed every page and confirmed the identifying fields are removed.", key="approval")
+                        if st.button("Share clean report", disabled=not st.session_state.get("approval")):
                             try:
                                 reference = service.share(token, analysis, uploaded.name, reviewed=True)
                                 for key in ["analysis", "preview", "preview_fingerprint"]:
@@ -155,7 +155,7 @@ def main():
             with st.expander(record["title"], expanded=True):
                 st.write(f"Reference: {reference}")
                 attachment(base64.b64decode(record["file_b64"]), record["file_ext"], reference)
-                st.text_area("Masked report text", record["masked_text"], disabled=True, key=f"masked_{reference}")
+                st.text_area("Report text", record["masked_text"], disabled=True, key=f"masked_{reference}")
                 with st.form(f"review_{reference}"):
                     notes = st.text_area("Clinical notes — do not include identifying information")
                     submitted = st.form_submit_button("Return report to admin")

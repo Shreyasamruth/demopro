@@ -6,6 +6,7 @@ from pathlib import Path
 from engine.deid import DeidEngine
 from utils.pdf_handler import PDFHandler
 from utils.ocr_handler import OCRHandler, validate_box
+from utils.field_layout import field_boxes, word_groups, remove_text_fields
 
 
 @dataclass
@@ -26,6 +27,7 @@ class MaskedDocument:
     mapping: dict
     phi_count: int
     previews: list
+    restoration_text: str = ""
 
 
 def matches(value, text):
@@ -58,7 +60,20 @@ class DocumentProcessor:
                 raise ValueError("OCR returned no transcription. Nothing was shared.")
             # Do not publish native hidden PDF text. The export is visible pixels only.
             text = result["full_text"]
-            detections.append(self._entities(result, visual=True))
+            entities = self._entities(result, visual=True)
+            self.ocr.locate_words(page)
+            for entity in entities:
+                if entity["text"].startswith("[") and entity["text"].endswith("]"):
+                    continue
+                aligned = field_boxes(page.words or [], entity["text"])
+                if not aligned:
+                    raise ValueError("A PHI value could not be aligned with the page text. Check the transcription and try scanning again; nothing was shared.")
+                # Use real text positions instead of the visual model's approximate box.
+                original_box = entity["box_2d"]
+                center = lambda box: ((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
+                cy, cx = center(original_box)
+                entity["box_2d"] = min(aligned, key=lambda b: (center(b)[0] - cy) ** 2 + (center(b)[1] - cx) ** 2)
+            detections.append(entities)
             texts.append(text)
         return Analysis(original, extension, pages, detections, texts)
 
@@ -72,25 +87,13 @@ class DocumentProcessor:
                 raise ValueError("PHI detection is missing text or label.")
             clean = dict(text=entity["text"].strip(), label=entity["label"].strip())
             if visual:
-                clean["box_2d"] = validate_box(entity.get("box_2d"))
+                clean["box_2d"] = validate_box(entity.get("field_box_2d", entity.get("box_2d")))
             entities.append(clean)
         return entities
 
     @staticmethod
     def _native_boxes(page, value):
-        # Match across line breaks using PDF word coordinates, not page-global boxes.
-        words = page.words or []
-        text, offsets = "", []
-        for word, box in words:
-            start = len(text)
-            text += word + " "
-            offsets.append((start, len(text) - 1, box))
-        boxes = []
-        for match in matches(value, text):
-            for start, end, box in offsets:
-                if start < match.end() and end > match.start():
-                    boxes.append(box)
-        return boxes
+        return field_boxes(page.words or [], value)
 
     def mask(self, analysis):
         expected_pages = len(analysis.pages) if analysis.pages else 1
@@ -123,18 +126,18 @@ class DocumentProcessor:
                         boxes.append(validate_box(entity["box_2d"]))
                     elif not native_boxes:
                         raise ValueError("Cannot locate a PHI value on the page. Nothing was shared.")
-                    # For scans, repeated text needs a box for every occurrence.
-                    if not native_boxes and occurrences:
-                        same = {tuple(e["box_2d"]) for e in entities if e["text"].casefold() == entity["text"].casefold() and "box_2d" in e}
-                        if len(same) < len(occurrences):
-                            raise ValueError("Repeated PHI needs a separate bounding box for every occurrence.")
+                    if occurrences and not (entity["text"].startswith("[") and entity["text"].endswith("]")):
+                        located = word_groups(page.words or [], entity["text"])
+                        if len(located) < len(occurrences):
+                            raise ValueError("Repeated PHI must be located on every occurrence before sharing.")
                 elif not occurrences:
                     raise ValueError("A detected PHI value was not found in the text.")
             count += len(all_entities)
             combined += text + ("\n\f\n" if index < len(analysis.texts) - 1 else "")
             if page:
                 clean_images.append(self.ocr.redact(page, boxes))
-        masked_text, mapping = self.engine.mask_text(combined, spans, reversible=True)
+        restoration_text, mapping = self.engine.mask_text(combined, spans, reversible=True)
+        masked_text = remove_text_fields(combined, spans)
         if analysis.extension == ".pdf":
             output, extension = self.pdf.export(analysis.pages, clean_images), ".pdf"
         elif analysis.pages:
@@ -143,4 +146,4 @@ class DocumentProcessor:
             output, extension = buffer.getvalue(), ".png"
         else:
             output, extension = masked_text.encode("utf-8"), ".txt"
-        return MaskedDocument(analysis.original, output, extension, masked_text, mapping, count, clean_images)
+        return MaskedDocument(analysis.original, output, extension, masked_text, mapping, count, clean_images, restoration_text)
